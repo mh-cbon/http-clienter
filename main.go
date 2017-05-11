@@ -285,15 +285,10 @@ func processType(mode, destName, srcName string, prog *loader.Program, pkg *load
 						log.Println("route param not identified into the method parameters " + p)
 						continue
 					}
-					url += fmt.Sprintf(`surl = strings.Replace(surl, %q, fmt.Sprintf("%%v", %v), 1)
+					url += fmt.Sprintf(`surl = strings.Replace(surl, "{%v}", fmt.Sprintf("%%v", %v), 1)
 								`, p, methodParam)
 					managedParamNames.Push(methodParam)
 				}
-
-				// fmt.Println("route", route)
-				// fmt.Println("mode", mode)
-				// fmt.Println("routeParamNames", routeParamNames)
-				// fmt.Println("routeParams", routeParams)
 
 				url += fmt.Sprintf(`url, URLerr := url.ParseRequestURI(surl)
 				`)
@@ -310,10 +305,15 @@ func processType(mode, destName, srcName string, prog *loader.Program, pkg *load
 					`, postParams)
 			}
 
+			url += fmt.Sprint(`finalUrl := url.String()
+				`)
 			preferedMethod := getPreferredMethod(annotations)
 			if base, ok := annotations["base"]; ok {
-				url = fmt.Sprintf("fmt.Sprint(%q, t.Base, %q)", "%v%v", base)
+				url += fmt.Sprintf(`finalUrl = fmt.Sprint(%q, %q, finalUrl)
+				`, "%v%v", base)
 			}
+			url += fmt.Sprintf(`finalUrl = fmt.Sprint(%q, t.Base, finalUrl)
+			`, "%v%v")
 
 			body := ""
 			if postParams != "" {
@@ -336,7 +336,7 @@ func processType(mode, destName, srcName string, prog *loader.Program, pkg *load
 
 			body += fmt.Sprintf(`
 				%v
-					req, reqErr := http.NewRequest(%q, url.String(), body)
+					req, reqErr := http.NewRequest(%q, finalUrl, body)
 					`, url, preferedMethod)
 			body += handleErr("reqErr")
 			body += fmt.Sprintf(`ret = req

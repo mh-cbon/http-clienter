@@ -46,13 +46,15 @@ func (t HTTPClientController) GetByID(urlID int) (*http.Response, error) {
 	// var err error
 
 	surl := "/{id}"
-	surl = strings.Replace(surl, "id", fmt.Sprintf("%v", urlID), 1)
+	surl = strings.Replace(surl, "{id}", fmt.Sprintf("%v", urlID), 1)
 	url, URLerr := url.ParseRequestURI(surl)
 	if URLerr != nil {
 		return nil, URLerr
 	}
+	finalUrl := url.String()
+	finalUrl = fmt.Sprint("%v%v", t.Base, finalUrl)
 
-	req, reqErr := http.NewRequest("GET", url.String(), body)
+	req, reqErr := http.NewRequest("GET", finalUrl, body)
 	if reqErr != nil {
 		return nil, reqErr
 	}
@@ -74,13 +76,15 @@ func (t HTTPClientController) UpdateByID(urlID int, reqBody *Tomate) (*http.Resp
 
 	body = bytes.NewBuffer(data)
 	surl := "/{id}"
-	surl = strings.Replace(surl, "id", fmt.Sprintf("%v", urlID), 1)
+	surl = strings.Replace(surl, "{id}", fmt.Sprintf("%v", urlID), 1)
 	url, URLerr := url.ParseRequestURI(surl)
 	if URLerr != nil {
 		return nil, URLerr
 	}
+	finalUrl := url.String()
+	finalUrl = fmt.Sprint("%v%v", t.Base, finalUrl)
 
-	req, reqErr := http.NewRequest("GET", url.String(), body)
+	req, reqErr := http.NewRequest("GET", finalUrl, body)
 	if reqErr != nil {
 		return nil, reqErr
 	}
@@ -96,13 +100,15 @@ func (t HTTPClientController) DeleteByID(REQid int) (*http.Response, error) {
 	// var err error
 
 	surl := "/{id}"
-	surl = strings.Replace(surl, "id", fmt.Sprintf("%v", REQid), 1)
+	surl = strings.Replace(surl, "{id}", fmt.Sprintf("%v", REQid), 1)
 	url, URLerr := url.ParseRequestURI(surl)
 	if URLerr != nil {
 		return nil, URLerr
 	}
+	finalUrl := url.String()
+	finalUrl = fmt.Sprint("%v%v", t.Base, finalUrl)
 
-	req, reqErr := http.NewRequest("GET", url.String(), body)
+	req, reqErr := http.NewRequest("GET", finalUrl, body)
 	if reqErr != nil {
 		return nil, reqErr
 	}
