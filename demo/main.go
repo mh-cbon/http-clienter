@@ -1,8 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"log"
 	"net/http"
+	"time"
 
+	"github.com/gorilla/mux"
 	httper "github.com/mh-cbon/httper/lib"
 )
 
@@ -19,6 +23,30 @@ func main() {
 	backend := NewChanTomates()
 	backend.Push(&Tomate{Name: "red"})
 
+	router := mux.NewRouter()
+
+	controller := NewController(backend)
+	jsoner := NewJSONController(controller)
+	httper := NewHTTPController(jsoner)
+	goriller := NewGorillerTomate(httper)
+
+	goriller.Bind(router)
+
+	http.Handle("/", router)
+
+	client := NewHTTPClientController(router, http.DefaultClient)
+	client.Base = "http://localhost:8080"
+
+	go func() {
+		<-time.After(time.Second)
+		tomate, err := client.GetByID(0)
+		fmt.Println(err)
+		fmt.Println(tomate)
+	}()
+
+	log.Fatal(
+		http.ListenAndServe(":8080", nil),
+	)
 }
 
 // Tomate is about red vegetables to make famous italian food.
@@ -34,7 +62,8 @@ func (t *Tomate) GetID() int {
 
 // TomateBackend ...
 type TomateBackend interface {
-	Filter(...func(*Tomate) bool) *ChanTomates // i want to return interface here, like TomateBackend.
+	// what if i want to return interface here, like TomateBackend.
+	Filter(...func(*Tomate) bool) *Tomates
 	First() *Tomate
 	Remove(*Tomate) bool
 }
@@ -55,7 +84,9 @@ func NewController(backend TomateBackend) *Controller {
 // @route /{id}
 // @methods GET
 func (t *Controller) GetByID(urlID int) *Tomate {
-	return t.backend.Filter(FilterTomates.ByID(urlID)).First()
+	res := t.backend.Filter(FilterTomates.ByID(urlID))
+	fmt.Println("res", res)
+	return res.First()
 }
 
 // UpdateByID ...

@@ -8,12 +8,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/mux"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
-
-	"github.com/gorilla/mux"
 )
 
 var xxNetHTTP = http.StatusOK
