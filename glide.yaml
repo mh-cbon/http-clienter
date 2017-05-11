@@ -1,0 +1,13 @@
+package: github.com/mh-cbon/http-clienter
+import:
+- package: github.com/gorilla/mux
+  version: ^1.3.0
+- package: github.com/mh-cbon/astutil
+  version: ^0.0.7
+- package: github.com/mh-cbon/httper
+  version: ^0.0.1
+  subpackages:
+  - lib
+- package: golang.org/x/tools
+  subpackages:
+  - go/loader
