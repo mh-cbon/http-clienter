@@ -72,20 +72,52 @@ The `struct` annotations are used as default for the `methods` annotations.
 package main
 
 import (
+	"fmt"
+	"log"
 	"net/http"
+	"time"
 
+	"github.com/gorilla/mux"
 	httper "github.com/mh-cbon/httper/lib"
 )
 
 //go:generate lister vegetables_gen.go *Tomate:Tomates
+//go:generate channeler tomate_chan_gen.go *Tomates:ChanTomates
 
+//go:generate jsoner -mode gorilla json_controller_gen.go *Controller:JSONController
+//go:generate httper -mode gorilla http_vegetables_gen.go *JSONController:HTTPController
+//go:generate goriller goriller_vegetables_gen.go *HTTPController:GorillerTomate
 //go:generate http-clienter -mode gorilla http_client_gen.go *Controller:HTTPClientController
 
 func main() {
 
-	backend := NewTomates()
+	backend := NewChanTomates()
 	backend.Push(&Tomate{Name: "red"})
 
+	router := mux.NewRouter()
+
+	controller := NewController(backend)
+	jsoner := NewJSONController(controller)
+	httper := NewHTTPController(jsoner)
+	goriller := NewGorillerTomate(httper)
+
+	goriller.Bind(router)
+
+	http.Handle("/", router)
+
+	client := NewHTTPClientController(router, http.DefaultClient)
+	client.Base = "http://localhost:8080"
+
+	go func() {
+		<-time.After(time.Second)
+		tomate, err := client.GetByID(0)
+		fmt.Println(err)
+		fmt.Println(tomate)
+	}()
+
+	log.Fatal(
+		http.ListenAndServe(":8080", nil),
+	)
 }
 
 // Tomate is about red vegetables to make famous italian food.
@@ -99,13 +131,21 @@ func (t *Tomate) GetID() int {
 	return t.ID
 }
 
+// TomateBackend ...
+type TomateBackend interface {
+	// what if i want to return interface here, like TomateBackend.
+	Filter(...func(*Tomate) bool) *Tomates
+	First() *Tomate
+	Remove(*Tomate) bool
+}
+
 // Controller of some resources.
 type Controller struct {
-	backend *Tomates
+	backend TomateBackend
 }
 
 // NewController ...
-func NewController(backend *Tomates) *Controller {
+func NewController(backend TomateBackend) *Controller {
 	return &Controller{
 		backend: backend,
 	}
@@ -115,7 +155,9 @@ func NewController(backend *Tomates) *Controller {
 // @route /{id}
 // @methods GET
 func (t *Controller) GetByID(urlID int) *Tomate {
-	return t.backend.Filter(FilterTomates.ByID(urlID)).First()
+	res := t.backend.Filter(FilterTomates.ByID(urlID))
+	fmt.Println("res", res)
+	return res.First()
 }
 
 // UpdateByID ...
@@ -215,10 +257,10 @@ func (t HTTPClientController) GetByID(urlID int) (*http.Response, error) {
 	if URLerr != nil {
 		return nil, URLerr
 	}
-	finalUrl := url.String()
-	finalUrl = fmt.Sprint("%v%v", t.Base, finalUrl)
+	finalURL := url.String()
+	finalURL = fmt.Sprintf("%v%v", t.Base, finalURL)
 
-	req, reqErr := http.NewRequest("GET", finalUrl, body)
+	req, reqErr := http.NewRequest("GET", finalURL, body)
 	if reqErr != nil {
 		return nil, reqErr
 	}
@@ -245,10 +287,10 @@ func (t HTTPClientController) UpdateByID(urlID int, reqBody *Tomate) (*http.Resp
 	if URLerr != nil {
 		return nil, URLerr
 	}
-	finalUrl := url.String()
-	finalUrl = fmt.Sprint("%v%v", t.Base, finalUrl)
+	finalURL := url.String()
+	finalURL = fmt.Sprintf("%v%v", t.Base, finalURL)
 
-	req, reqErr := http.NewRequest("GET", finalUrl, body)
+	req, reqErr := http.NewRequest("GET", finalURL, body)
 	if reqErr != nil {
 		return nil, reqErr
 	}
@@ -269,10 +311,10 @@ func (t HTTPClientController) DeleteByID(REQid int) (*http.Response, error) {
 	if URLerr != nil {
 		return nil, URLerr
 	}
-	finalUrl := url.String()
-	finalUrl = fmt.Sprint("%v%v", t.Base, finalUrl)
+	finalURL := url.String()
+	finalURL = fmt.Sprintf("%v%v", t.Base, finalURL)
 
-	req, reqErr := http.NewRequest("GET", finalUrl, body)
+	req, reqErr := http.NewRequest("GET", finalURL, body)
 	if reqErr != nil {
 		return nil, reqErr
 	}
