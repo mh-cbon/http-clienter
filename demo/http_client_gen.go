@@ -8,11 +8,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/gorilla/mux"
 )
 
 var xxNetHTTP = http.StatusOK
@@ -51,10 +52,10 @@ func (t HTTPClientController) GetByID(urlID int) (*http.Response, error) {
 	if URLerr != nil {
 		return nil, URLerr
 	}
-	finalUrl := url.String()
-	finalUrl = fmt.Sprint("%v%v", t.Base, finalUrl)
+	finalURL := url.String()
+	finalURL = fmt.Sprintf("%v%v", t.Base, finalURL)
 
-	req, reqErr := http.NewRequest("GET", finalUrl, body)
+	req, reqErr := http.NewRequest("GET", finalURL, body)
 	if reqErr != nil {
 		return nil, reqErr
 	}
@@ -81,10 +82,10 @@ func (t HTTPClientController) UpdateByID(urlID int, reqBody *Tomate) (*http.Resp
 	if URLerr != nil {
 		return nil, URLerr
 	}
-	finalUrl := url.String()
-	finalUrl = fmt.Sprint("%v%v", t.Base, finalUrl)
+	finalURL := url.String()
+	finalURL = fmt.Sprintf("%v%v", t.Base, finalURL)
 
-	req, reqErr := http.NewRequest("GET", finalUrl, body)
+	req, reqErr := http.NewRequest("GET", finalURL, body)
 	if reqErr != nil {
 		return nil, reqErr
 	}
@@ -105,10 +106,10 @@ func (t HTTPClientController) DeleteByID(REQid int) (*http.Response, error) {
 	if URLerr != nil {
 		return nil, URLerr
 	}
-	finalUrl := url.String()
-	finalUrl = fmt.Sprint("%v%v", t.Base, finalUrl)
+	finalURL := url.String()
+	finalURL = fmt.Sprintf("%v%v", t.Base, finalURL)
 
-	req, reqErr := http.NewRequest("GET", finalUrl, body)
+	req, reqErr := http.NewRequest("GET", finalURL, body)
 	if reqErr != nil {
 		return nil, reqErr
 	}

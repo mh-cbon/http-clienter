@@ -7,12 +7,16 @@ import (
 )
 
 //go:generate lister vegetables_gen.go *Tomate:Tomates
+//go:generate channeler tomate_chan_gen.go *Tomates:ChanTomates
 
+//go:generate jsoner -mode gorilla json_controller_gen.go *Controller:JSONController
+//go:generate httper -mode gorilla http_vegetables_gen.go *JSONController:HTTPController
+//go:generate goriller goriller_vegetables_gen.go *HTTPController:GorillerTomate
 //go:generate http-clienter -mode gorilla http_client_gen.go *Controller:HTTPClientController
 
 func main() {
 
-	backend := NewTomates()
+	backend := NewChanTomates()
 	backend.Push(&Tomate{Name: "red"})
 
 }
@@ -28,13 +32,20 @@ func (t *Tomate) GetID() int {
 	return t.ID
 }
 
+// TomateBackend ...
+type TomateBackend interface {
+	Filter(...func(*Tomate) bool) *ChanTomates // i want to return interface here, like TomateBackend.
+	First() *Tomate
+	Remove(*Tomate) bool
+}
+
 // Controller of some resources.
 type Controller struct {
-	backend *Tomates
+	backend TomateBackend
 }
 
 // NewController ...
-func NewController(backend *Tomates) *Controller {
+func NewController(backend TomateBackend) *Controller {
 	return &Controller{
 		backend: backend,
 	}

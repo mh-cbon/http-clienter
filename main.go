@@ -305,14 +305,14 @@ func processType(mode, destName, srcName string, prog *loader.Program, pkg *load
 					`, postParams)
 			}
 
-			url += fmt.Sprint(`finalUrl := url.String()
+			url += fmt.Sprint(`finalURL := url.String()
 				`)
 			preferedMethod := getPreferredMethod(annotations)
 			if base, ok := annotations["base"]; ok {
-				url += fmt.Sprintf(`finalUrl = fmt.Sprint(%q, %q, finalUrl)
+				url += fmt.Sprintf(`finalURL = fmt.Sprint(%q, %q, finalURL)
 				`, "%v%v", base)
 			}
-			url += fmt.Sprintf(`finalUrl = fmt.Sprint(%q, t.Base, finalUrl)
+			url += fmt.Sprintf(`finalURL = fmt.Sprintf(%q, t.Base, finalURL)
 			`, "%v%v")
 
 			body := ""
@@ -336,7 +336,7 @@ func processType(mode, destName, srcName string, prog *loader.Program, pkg *load
 
 			body += fmt.Sprintf(`
 				%v
-					req, reqErr := http.NewRequest(%q, finalUrl, body)
+					req, reqErr := http.NewRequest(%q, finalURL, body)
 					`, url, preferedMethod)
 			body += handleErr("reqErr")
 			body += fmt.Sprintf(`ret = req
