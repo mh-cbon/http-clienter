@@ -4,6 +4,10 @@ package utils
 // github.com/mh-cbon/lister
 // do not edit
 
+import (
+	"encoding/json"
+)
+
 // StringSlice implements a typed slice of string
 type StringSlice struct{ items []string }
 
@@ -150,7 +154,7 @@ func (t *StringSlice) At(i int) string {
 	return t.items[i]
 }
 
-// Filter return a new *StringSlice with all items satisfying f.
+// Filter return a new StringSlice with all items satisfying f.
 func (t *StringSlice) Filter(filters ...func(string) bool) *StringSlice {
 	ret := NewStringSlice()
 	for _, i := range t.items {
@@ -168,7 +172,7 @@ func (t *StringSlice) Filter(filters ...func(string) bool) *StringSlice {
 	return ret
 }
 
-// Map return a new *StringSlice of each items modified by f.
+// Map return a new StringSlice of each items modified by f.
 func (t *StringSlice) Map(mappers ...func(string) string) *StringSlice {
 	ret := NewStringSlice()
 	for _, i := range t.items {
@@ -202,4 +206,19 @@ func (t *StringSlice) Last() string {
 // Empty returns true if the slice is empty.
 func (t *StringSlice) Empty() bool {
 	return len(t.items) == 0
+}
+
+//UnmarshalJSON JSON unserializes StringSlice
+func (t *StringSlice) UnmarshalJSON(b []byte) error {
+	var items []string
+	if err := json.Unmarshal(b, &items); err != nil {
+		return err
+	}
+	t.items = items
+	return nil
+}
+
+//MarshalJSON JSON serializes StringSlice
+func (t *StringSlice) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.items)
 }

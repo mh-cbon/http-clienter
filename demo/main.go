@@ -10,38 +10,41 @@ import (
 	httper "github.com/mh-cbon/httper/lib"
 )
 
-//go:generate lister vegetables_gen.go *Tomate:Tomates
-//go:generate channeler tomate_chan_gen.go *Tomates:ChanTomates
+//go:generate lister *Tomate:TomatesGen
+//go:generate channeler TomatesGen:TomatesSyncGen
 
-//go:generate jsoner -mode gorilla json_controller_gen.go *Controller:JSONController
-//go:generate httper -mode gorilla http_vegetables_gen.go *JSONController:HTTPController
-//go:generate goriller goriller_vegetables_gen.go *HTTPController:GorillerTomate
-//go:generate http-clienter -mode gorilla http_client_gen.go *Controller:HTTPClientController
+//go:generate jsoner -mode gorilla *Controller:ControllerJSONGen
+//go:generate httper -mode gorilla *ControllerJSONGen:ControllerHTTPGen
+//go:generate goriller *ControllerHTTPGen:ControllerGoriller
+//go:generate goriller -mode rpc *ControllerHTTPGen:ControllerGorillerRPC
+
+//go:generate http-clienter -mode gorilla *Controller:HTTPClientController
+//go:generate http-clienter -mode std *Controller:HTTPClientControllerRPC
 
 func main() {
 
-	backend := NewChanTomates()
+	backend := NewTomatesSyncGen()
 	backend.Push(&Tomate{Name: "red"})
 
 	router := mux.NewRouter()
 
 	controller := NewController(backend)
-	jsoner := NewJSONController(controller)
-	httper := NewHTTPController(jsoner)
-	goriller := NewGorillerTomate(httper)
+	jsoner := NewControllerJSONGen(controller, nil)
+	httper := NewControllerHTTPGen(jsoner, nil)
+	goriller := NewControllerGoriller(httper)
 
 	goriller.Bind(router)
 
 	http.Handle("/", router)
 
-	client := NewHTTPClientController(router, http.DefaultClient)
+	client := NewHTTPClientController(router)
 	client.Base = "http://localhost:8080"
 
 	go func() {
 		<-time.After(time.Second)
-		tomate, err := client.GetByID(0)
+		req, err := client.GetByID(0)
 		fmt.Println(err)
-		fmt.Println(tomate)
+		fmt.Println(http.DefaultClient.Do(req))
 	}()
 
 	log.Fatal(
@@ -63,7 +66,7 @@ func (t *Tomate) GetID() int {
 // TomateBackend ...
 type TomateBackend interface {
 	// what if i want to return interface here, like TomateBackend.
-	Filter(...func(*Tomate) bool) *Tomates
+	Filter(...func(*Tomate) bool) *TomatesGen
 	First() *Tomate
 	Remove(*Tomate) bool
 }
@@ -84,7 +87,7 @@ func NewController(backend TomateBackend) *Controller {
 // @route /{id}
 // @methods GET
 func (t *Controller) GetByID(urlID int) *Tomate {
-	res := t.backend.Filter(FilterTomates.ByID(urlID))
+	res := t.backend.Filter(FilterTomatesGen.ByID(urlID))
 	fmt.Println("res", res)
 	return res.First()
 }

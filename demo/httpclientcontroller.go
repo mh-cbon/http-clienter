@@ -15,32 +15,23 @@ import (
 	"strings"
 )
 
-var xxNetHTTP = http.StatusOK
-var xxNetURL = url.PathEscape
-var xxFmt = fmt.Println
-var xxIo = io.Copy
-var xxStrings = strings.Replace
-var xxBytes = bytes.Compare
-
 // HTTPClientController is an http-clienter of *Controller.
 // Controller of some resources.
 type HTTPClientController struct {
 	router *mux.Router
-	embed  *http.Client
 	Base   string
 }
 
 // NewHTTPClientController constructs an http-clienter of *Controller
-func NewHTTPClientController(router *mux.Router, embed *http.Client) *HTTPClientController {
+func NewHTTPClientController(router *mux.Router) *HTTPClientController {
 	ret := &HTTPClientController{
 		router: router,
-		embed:  embed,
 	}
 	return ret
 }
 
 // GetByID constructs a request to /{id}
-func (t HTTPClientController) GetByID(urlID int) (*http.Response, error) {
+func (t HTTPClientController) GetByID(urlID int) (*http.Request, error) {
 	var ret *http.Request
 	var body io.Reader
 	// var err error
@@ -60,11 +51,11 @@ func (t HTTPClientController) GetByID(urlID int) (*http.Response, error) {
 	}
 	ret = req
 
-	return t.embed.Do(ret)
+	return ret, nil
 }
 
 // UpdateByID constructs a request to /{id}
-func (t HTTPClientController) UpdateByID(urlID int, reqBody *Tomate) (*http.Response, error) {
+func (t HTTPClientController) UpdateByID(urlID int, reqBody *Tomate) (*http.Request, error) {
 	var ret *http.Request
 	var body io.Reader
 	// var err error
@@ -90,11 +81,11 @@ func (t HTTPClientController) UpdateByID(urlID int, reqBody *Tomate) (*http.Resp
 	}
 	ret = req
 
-	return t.embed.Do(ret)
+	return ret, nil
 }
 
 // DeleteByID constructs a request to /{id}
-func (t HTTPClientController) DeleteByID(REQid int) (*http.Response, error) {
+func (t HTTPClientController) DeleteByID(REQid int) (*http.Request, error) {
 	var ret *http.Request
 	var body io.Reader
 	// var err error
@@ -114,5 +105,5 @@ func (t HTTPClientController) DeleteByID(REQid int) (*http.Response, error) {
 	}
 	ret = req
 
-	return t.embed.Do(ret)
+	return ret, nil
 }
