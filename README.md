@@ -13,7 +13,7 @@ Package http-clienter generates http client of a type
 - [API example](#api-example)
   - [Annotations](#annotations)
   - [> demo/main.go](#-demomaingo)
-  - [> demo/http_client_gen.go](#-demohttp_client_gengo)
+  - [> demo/httpclientcontroller.go](#-demohttpclientcontrollergo)
 - [Recipes](#recipes)
   - [Release the project](#release-the-project)
 - [History](#history)
@@ -35,11 +35,15 @@ http-clienter 0.0.0
 
 Usage
 
-	http-clienter [out] [...types]
+	http-clienter [-p name] [-mode name] [...types]
 
-	out:   Output destination of the results, use '-' for stdout.
-	types: A list of types such as src:dst.
-	mode:  The generation mode.
+  types:  A list of types such as src:dst.
+          A type is defined by its package path and its type name,
+          [pkgpath/]name
+          If the Package path is empty, it is set to the package name being generated.
+          Name can be a valid type identifier such as TypeName, *TypeName, []TypeName 
+  -p:     The name of the package output.
+  -mode:  The generation mode gorilla|std.
 ```
 
 ## Cli examples
@@ -81,38 +85,41 @@ import (
 	httper "github.com/mh-cbon/httper/lib"
 )
 
-//go:generate lister vegetables_gen.go *Tomate:Tomates
-//go:generate channeler tomate_chan_gen.go *Tomates:ChanTomates
+//go:generate lister *Tomate:TomatesGen
+//go:generate channeler TomatesGen:TomatesSyncGen
 
-//go:generate jsoner -mode gorilla json_controller_gen.go *Controller:JSONController
-//go:generate httper -mode gorilla http_vegetables_gen.go *JSONController:HTTPController
-//go:generate goriller goriller_vegetables_gen.go *HTTPController:GorillerTomate
-//go:generate http-clienter -mode gorilla http_client_gen.go *Controller:HTTPClientController
+//go:generate jsoner -mode gorilla *Controller:ControllerJSONGen
+//go:generate httper -mode gorilla *ControllerJSONGen:ControllerHTTPGen
+//go:generate goriller *ControllerHTTPGen:ControllerGoriller
+//go:generate goriller -mode rpc *ControllerHTTPGen:ControllerGorillerRPC
+
+//go:generate http-clienter -mode gorilla *Controller:HTTPClientController
+//go:generate http-clienter -mode std *Controller:HTTPClientControllerRPC
 
 func main() {
 
-	backend := NewChanTomates()
+	backend := NewTomatesSyncGen()
 	backend.Push(&Tomate{Name: "red"})
 
 	router := mux.NewRouter()
 
 	controller := NewController(backend)
-	jsoner := NewJSONController(controller)
-	httper := NewHTTPController(jsoner)
-	goriller := NewGorillerTomate(httper)
+	jsoner := NewControllerJSONGen(controller, nil)
+	httper := NewControllerHTTPGen(jsoner, nil)
+	goriller := NewControllerGoriller(httper)
 
 	goriller.Bind(router)
 
 	http.Handle("/", router)
 
-	client := NewHTTPClientController(router, http.DefaultClient)
+	client := NewHTTPClientController(router)
 	client.Base = "http://localhost:8080"
 
 	go func() {
 		<-time.After(time.Second)
-		tomate, err := client.GetByID(0)
+		req, err := client.GetByID(0)
 		fmt.Println(err)
-		fmt.Println(tomate)
+		fmt.Println(http.DefaultClient.Do(req))
 	}()
 
 	log.Fatal(
@@ -134,7 +141,7 @@ func (t *Tomate) GetID() int {
 // TomateBackend ...
 type TomateBackend interface {
 	// what if i want to return interface here, like TomateBackend.
-	Filter(...func(*Tomate) bool) *Tomates
+	Filter(...func(*Tomate) bool) *TomatesGen
 	First() *Tomate
 	Remove(*Tomate) bool
 }
@@ -155,7 +162,7 @@ func NewController(backend TomateBackend) *Controller {
 // @route /{id}
 // @methods GET
 func (t *Controller) GetByID(urlID int) *Tomate {
-	res := t.backend.Filter(FilterTomates.ByID(urlID))
+	res := t.backend.Filter(FilterTomatesGen.ByID(urlID))
 	fmt.Println("res", res)
 	return res.First()
 }
@@ -202,7 +209,7 @@ func (t *Controller) TestRPCer(id int) bool {
 
 Following code is the generated implementation of the goriller binder.
 
-#### > demo/http_client_gen.go
+#### > demo/httpclientcontroller.go
 ```go
 package main
 
@@ -221,32 +228,23 @@ import (
 	"strings"
 )
 
-var xxNetHTTP = http.StatusOK
-var xxNetURL = url.PathEscape
-var xxFmt = fmt.Println
-var xxIo = io.Copy
-var xxStrings = strings.Replace
-var xxBytes = bytes.Compare
-
 // HTTPClientController is an http-clienter of *Controller.
 // Controller of some resources.
 type HTTPClientController struct {
 	router *mux.Router
-	embed  *http.Client
 	Base   string
 }
 
 // NewHTTPClientController constructs an http-clienter of *Controller
-func NewHTTPClientController(router *mux.Router, embed *http.Client) *HTTPClientController {
+func NewHTTPClientController(router *mux.Router) *HTTPClientController {
 	ret := &HTTPClientController{
 		router: router,
-		embed:  embed,
 	}
 	return ret
 }
 
 // GetByID constructs a request to /{id}
-func (t HTTPClientController) GetByID(urlID int) (*http.Response, error) {
+func (t HTTPClientController) GetByID(urlID int) (*http.Request, error) {
 	var ret *http.Request
 	var body io.Reader
 	// var err error
@@ -266,11 +264,11 @@ func (t HTTPClientController) GetByID(urlID int) (*http.Response, error) {
 	}
 	ret = req
 
-	return t.embed.Do(ret)
+	return ret, nil
 }
 
 // UpdateByID constructs a request to /{id}
-func (t HTTPClientController) UpdateByID(urlID int, reqBody *Tomate) (*http.Response, error) {
+func (t HTTPClientController) UpdateByID(urlID int, reqBody *Tomate) (*http.Request, error) {
 	var ret *http.Request
 	var body io.Reader
 	// var err error
@@ -296,11 +294,11 @@ func (t HTTPClientController) UpdateByID(urlID int, reqBody *Tomate) (*http.Resp
 	}
 	ret = req
 
-	return t.embed.Do(ret)
+	return ret, nil
 }
 
 // DeleteByID constructs a request to /{id}
-func (t HTTPClientController) DeleteByID(REQid int) (*http.Response, error) {
+func (t HTTPClientController) DeleteByID(REQid int) (*http.Request, error) {
 	var ret *http.Request
 	var body io.Reader
 	// var err error
@@ -320,7 +318,7 @@ func (t HTTPClientController) DeleteByID(REQid int) (*http.Response, error) {
 	}
 	ret = req
 
-	return t.embed.Do(ret)
+	return ret, nil
 }
 ```
 

@@ -47,7 +47,7 @@ The `struct` annotations are used as default for the `methods` annotations.
 
 Following code is the generated implementation of the goriller binder.
 
-#### > {{cat "demo/http_client_gen.go" | color "go"}}
+#### > {{cat "demo/httpclientcontroller.go" | color "go"}}
 
 
 # Recipes
