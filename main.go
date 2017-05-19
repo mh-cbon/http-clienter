@@ -208,15 +208,15 @@ func processType(mode string, todo utils.TransformArg, fileOut *utils.FileOut) e
 	}
 
 	if mode == gorillaMode {
-		fileOut.AddImport("encoding/json", "")
-		fileOut.AddImport("bytes", "")
-		fileOut.AddImport("io", "")
-		fileOut.AddImport("net/url", "")
 		fileOut.AddImport("fmt", "")
+		fileOut.AddImport("io", "")
+		fileOut.AddImport("net/http", "")
+		fileOut.AddImport("net/url", "")
 		fileOut.AddImport("strings", "")
 		fileOut.AddImport("github.com/gorilla/mux", "")
+	} else {
+		fileOut.AddImport("net/http", "")
 	}
-	fileOut.AddImport("net/http", "")
 
 	for _, m := range foundMethods[srcConcrete] {
 		methodName := astutil.MethodName(m)
@@ -225,6 +225,7 @@ func processType(mode string, todo utils.TransformArg, fileOut *utils.FileOut) e
 		annotations := astutil.GetAnnotations(comment, "@")
 		annotations = mergeAnnotations(structAnnotations, annotations)
 		params := astutil.MethodParams(m)
+		lParams := commaArgsToSlice(params)
 		paramNames := astutil.MethodParamNames(m)
 		lParamNames := commaArgsToSlice(paramNames)
 
@@ -245,140 +246,129 @@ func processType(mode string, todo utils.TransformArg, fileOut *utils.FileOut) e
 		}
 		`, destName, methodName, params)
 
-		} else {
+		} else if route, ok := annotations["route"]; ok {
 
-			if route, ok := annotations["route"]; ok {
+			importIDs := astutil.GetSignatureImportIdentifiers(m)
+			for _, i := range importIDs {
+				fileOut.AddImport(astutil.GetImportPath(pkg, i), i)
+			}
 
-				importIDs := astutil.GetSignatureImportIdentifiers(m)
-				for _, i := range importIDs {
-					fileOut.AddImport(astutil.GetImportPath(pkg, i), i)
+			getParams := ""
+			postParams := ""
+			routeName, _ := annotations["name"]
+
+			// - look for every route params
+			managedParamNames := utils.NewStringSlice()
+			routeParamsExpr := []string{}
+			routeParamNames := getRouteParamsFromRoute(mode, route)
+			for _, p := range routeParamNames {
+				routeParamsExpr = append(routeParamsExpr, fmt.Sprintf("%q", p))
+				routeParamsExpr = append(routeParamsExpr, p)
+				methodParam := getMethodParamForRouteParam(mode, lParamNames, p, managedParamNames)
+				if methodParam == "" {
+					log.Println("route param not identified into the method parameters " + p)
+					continue
 				}
+				managedParamNames.Push(methodParam)
+			}
 
-				getParams := ""
-				postParams := ""
-				// postParams := "form := url.Values{}"
-				routeName, _ := annotations["name"]
-
-				managedParamNames := utils.NewStringSlice()
-				routeParamsExpr := []string{}
-				routeParamNames := getRouteParamsFromRoute(mode, route)
-				for _, p := range routeParamNames {
-					routeParamsExpr = append(routeParamsExpr, fmt.Sprintf("%q", p))
-					routeParamsExpr = append(routeParamsExpr, p)
-					methodParam := getMethodParamForRouteParam(mode, lParamNames, p, managedParamNames)
-					if methodParam == "" {
-						log.Println("route param not identified into the method parameters " + p)
-						continue
-					}
-					managedParamNames.Push(methodParam)
+			// - look for url/req/post params, not already managed by the route params
+			for _, p := range lParamNames {
+				if p == reqBodyVarName {
+					continue
 				}
+				if !managedParamNames.Contains(p) {
+					prefix := getVarPrefix(mode, p)
+					rParamName := getVarValueName(mode, p)
+					if prefix == "get" || prefix == "url" || prefix == "req" {
+						getParams += fmt.Sprintf("url.Query().Add(%q, %v)", rParamName, p)
+						managedParamNames.Push(p)
 
-				for _, p := range lParamNames {
-					if p == reqBodyVarName {
-						continue
-					}
-					if !managedParamNames.Contains(p) {
-						prefix := getVarPrefix(mode, p)
-						rParamName := getVarValueName(mode, p)
-						if prefix == "get" || prefix == "url" || prefix == "req" {
-							getParams += fmt.Sprintf("url.Query().Add(%q, %v)", rParamName, p)
-							managedParamNames.Push(p)
-
-						} else if prefix == "post" {
-							getParams += fmt.Sprintf("form.Add(%q, %v)", rParamName, p)
-							managedParamNames.Push(p)
-						}
+					} else if prefix == "post" {
+						getParams += fmt.Sprintf("form.Add(%q, %v)", rParamName, p)
+						managedParamNames.Push(p)
 					}
 				}
+			}
 
+			// - forge url from the router using the route name
+			url := ""
+			if routeName != "" {
 				k := ""
 				if len(routeParamsExpr) > 0 {
 					k = strings.Join(routeParamsExpr, ", ")
 					k = k[:len(k)-2]
 				}
-				url := ""
-				if routeName != "" {
-					url = fmt.Sprintf(`url, URLerr := t.router.Get(%q).URL(%v)
-							`, routeName, k)
-				} else {
-					url += fmt.Sprintf(`surl := %q
-								`, route)
+				url = fmt.Sprintf(`url, URLerr := t.router.Get(%q).URL(%v)
+									`, routeName, k)
+			} else {
+				// - a route without name neeeds a jit update.
+				url += fmt.Sprintf(`surl := %q
+										`, route)
 
-					managedParamNames = utils.NewStringSlice()
-					for _, p := range routeParamNames {
-						methodParam := getMethodParamForRouteParam(mode, lParamNames, p, managedParamNames)
-						if methodParam == "" {
-							log.Println("route param not identified into the method parameters " + p)
-							continue
-						}
-						url += fmt.Sprintf(`surl = strings.Replace(surl, "{%v}", fmt.Sprintf("%%v", %v), 1)
-											`, p, methodParam)
-						managedParamNames.Push(methodParam)
+				managedParamNames = utils.NewStringSlice()
+				for _, p := range routeParamNames {
+					methodParam := getMethodParamForRouteParam(mode, lParamNames, p, managedParamNames)
+					if methodParam == "" {
+						log.Println("route param not identified into the method parameters " + p)
+						continue
 					}
-
-					url += fmt.Sprintf(`url, URLerr := url.ParseRequestURI(surl)
-							`)
-				}
-				url += handleErr("URLerr")
-
-				if getParams != "" {
-					url += fmt.Sprintf(`%v
-								`, getParams)
-				}
-				if postParams != "" {
-					url += fmt.Sprintf(`form := url.Values{}
-								%v
-								`, postParams)
+					url += fmt.Sprintf(`surl = strings.Replace(surl, "{%v}", fmt.Sprintf("%%v", %v), 1)
+													`, p, methodParam)
+					managedParamNames.Push(methodParam)
 				}
 
-				url += fmt.Sprint(`finalURL := url.String()
-							`)
-				preferedMethod := getPreferredMethod(annotations)
-				if base, ok := annotations["base"]; ok {
-					url += fmt.Sprintf(`finalURL = fmt.Sprint(%q, %q, finalURL)
-							`, "%v%v", base)
-				}
-				url += fmt.Sprintf(`finalURL = fmt.Sprintf(%q, t.Base, finalURL)
-						`, "%v%v")
-
-				body := ""
-				if postParams != "" {
-					body += fmt.Sprintf(`
-								body = strings.NewReader(form.Encode())`)
-
-				} else if hasReqBody(lParamNames) {
-					// should test that
-					amp := ""
-					if !astutil.IsAPointedType(getReqBodyType(strings.Split(params, ", "))) {
-						amp = "&"
-					}
-					body += fmt.Sprintf(`
-									data, reqBodyErr := json.Marshal(%v%v)
-									`, amp, "reqBody")
-					body += handleErr("reqBodyErr")
-					body += fmt.Sprintf(`
-									body = bytes.NewBuffer(data)`)
-				}
-
-				body += fmt.Sprintf(`
-							%v
-								req, reqErr := http.NewRequest(%q, finalURL, body)
-								`, url, preferedMethod)
-				body += handleErr("reqErr")
-				body += fmt.Sprintf(`ret = req
-							`)
-
-				fmt.Fprintf(dest, `// %v constructs a request to %v
-			      `, methodName, route)
-				fmt.Fprintf(dest, `func(t %v) %v(%v) (*http.Request, error) {
-			        var ret *http.Request
-			        var body io.Reader
-			        // var err error
-			        %v
-			        return ret , nil
-			      }
-			      `, destName, methodName, params, body)
+				url += fmt.Sprintf(`url, URLerr := url.ParseRequestURI(surl)
+									`)
 			}
+			url += handleErr("URLerr")
+
+			// - if any GET params, handle them
+			if getParams != "" {
+				url += fmt.Sprintf("%v\n", getParams)
+			}
+			// - if any GET params, handle them
+			if postParams != "" {
+				url += fmt.Sprintf("form := url.Values{}\n%v\n", postParams)
+			}
+
+			url += fmt.Sprint("finalURL := url.String()\n")
+
+			// - build the final url
+			if base, ok := annotations["base"]; ok {
+				url += fmt.Sprintf("finalURL = fmt.Sprint(%q, %q, finalURL)\n", "%v%v", base)
+			}
+			url += fmt.Sprintf("finalURL = fmt.Sprintf(%q, t.Base, finalURL)\n", "%v%v")
+
+			// modify method params to transform a reqBody ? to reqBody io.Reader
+			methodParams := changeParamType(lParams, "reqBody", "io.Reader")
+
+			body := ""
+			// - handle the request body
+			if postParams != "" {
+				body += fmt.Sprintf("body = strings.NewReader(form.Encode())\n")
+
+			} else if hasReqBody(lParamNames) {
+				body += fmt.Sprintf("body = %v\n", "reqBody")
+			}
+
+			// - create the request object
+			preferedMethod := getPreferredMethod(annotations)
+			body += fmt.Sprintf("%v\n", url)
+			body += fmt.Sprintf(" req, reqErr := http.NewRequest(%q, finalURL, body)\n", preferedMethod)
+			body += handleErr("reqErr")
+			body += fmt.Sprintf("ret = req\n")
+
+			// - print the method
+			fmt.Fprintf(dest, "// %v constructs a request to %v\n", methodName, route)
+			fmt.Fprintf(dest, `func(t %v) %v(%v) (*http.Request, error) {
+					        var ret *http.Request
+					        var body io.Reader
+					        // var err error
+					        %v
+					        return ret , nil
+					      }
+					      `, destName, methodName, strings.Join(methodParams, ","), body)
 		}
 
 	}
@@ -427,6 +417,18 @@ func getReqBodyType(params []string) string {
 		}
 	}
 	return ""
+}
+
+func changeParamType(lParams []string, name, t string) []string {
+	ret := []string{}
+	for _, p := range lParams {
+		p = strings.TrimSpace(p)
+		if strings.Index(p, name) == 0 {
+			p = name + " " + t
+		}
+		ret = append(ret, p)
+	}
+	return ret
 }
 
 var re = regexp.MustCompile(`({[^}]+(:[^}]+|)})`)

@@ -5,8 +5,6 @@ package main
 // do not edit
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
 	"io"
@@ -35,7 +33,6 @@ func (t HTTPClientController) GetByID(urlID int) (*http.Request, error) {
 	var ret *http.Request
 	var body io.Reader
 	// var err error
-
 	surl := "/{id}"
 	surl = strings.Replace(surl, "{id}", fmt.Sprintf("%v", urlID), 1)
 	url, URLerr := url.ParseRequestURI(surl)
@@ -55,17 +52,11 @@ func (t HTTPClientController) GetByID(urlID int) (*http.Request, error) {
 }
 
 // UpdateByID constructs a request to /{id}
-func (t HTTPClientController) UpdateByID(urlID int, reqBody *Tomate) (*http.Request, error) {
+func (t HTTPClientController) UpdateByID(urlID int, reqBody io.Reader) (*http.Request, error) {
 	var ret *http.Request
 	var body io.Reader
 	// var err error
-
-	data, reqBodyErr := json.Marshal(reqBody)
-	if reqBodyErr != nil {
-		return nil, reqBodyErr
-	}
-
-	body = bytes.NewBuffer(data)
+	body = reqBody
 	surl := "/{id}"
 	surl = strings.Replace(surl, "{id}", fmt.Sprintf("%v", urlID), 1)
 	url, URLerr := url.ParseRequestURI(surl)
@@ -89,7 +80,6 @@ func (t HTTPClientController) DeleteByID(REQid int) (*http.Request, error) {
 	var ret *http.Request
 	var body io.Reader
 	// var err error
-
 	surl := "/{id}"
 	surl = strings.Replace(surl, "{id}", fmt.Sprintf("%v", REQid), 1)
 	url, URLerr := url.ParseRequestURI(surl)

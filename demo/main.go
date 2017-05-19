@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -37,19 +40,42 @@ func main() {
 
 	http.Handle("/", router)
 
-	client := NewHTTPClientController(router)
-	client.Base = "http://localhost:8080"
+	client := &httpClient{base: "http://localhost:8080"}
+	api := NewHTTPClientController(router)
 
 	go func() {
-		<-time.After(time.Second)
-		req, err := client.GetByID(0)
-		fmt.Println(err)
-		fmt.Println(http.DefaultClient.Do(req))
+		log.Fatal(
+			http.ListenAndServe(":8080", nil),
+		)
 	}()
 
-	log.Fatal(
-		http.ListenAndServe(":8080", nil),
-	)
+	<-time.After(time.Second)
+	req, err := api.GetByID(0)
+	if err != nil {
+		log.Fatal(err)
+	}
+	res, reqErr := client.Do(req)
+	if reqErr != nil {
+		log.Fatal(reqErr)
+	}
+	defer res.Body.Close()
+	fmt.Println(res)
+	io.Copy(os.Stdout, res.Body)
+	fmt.Println()
+}
+
+type httpClient struct {
+	http.Client
+	base string
+}
+
+func (c httpClient) Do(req *http.Request) (*http.Response, error) {
+	newURL, err := url.Parse(fmt.Sprintf("%v%v", c.base, req.URL.String()))
+	if err != nil {
+		return nil, err
+	}
+	req.URL = newURL
+	return c.Client.Do(req)
 }
 
 // Tomate is about red vegetables to make famous italian food.
@@ -88,7 +114,6 @@ func NewController(backend TomateBackend) *Controller {
 // @methods GET
 func (t *Controller) GetByID(urlID int) *Tomate {
 	res := t.backend.Filter(FilterTomatesGen.ByID(urlID))
-	fmt.Println("res", res)
 	return res.First()
 }
 
